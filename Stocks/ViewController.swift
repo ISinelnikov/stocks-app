@@ -1,13 +1,15 @@
 import UIKit
 
 class ViewController: UIViewController {
-    @IBOutlet weak var companyNameLabel: UILabel!
-    @IBOutlet weak var companySymbolLabel: UILabel!
-    @IBOutlet weak var priceLabel: UILabel!
-    @IBOutlet weak var priceChangeLabel: UILabel!
-    
-    @IBOutlet weak var companyPickerView: UIPickerView!
-    @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
+    @IBOutlet var companyNameLabel: UILabel!
+    @IBOutlet var companySymbolLabel: UILabel!
+    @IBOutlet var priceLabel: UILabel!
+    @IBOutlet var priceChangeLabel: UILabel!
+
+    @IBOutlet var companyPickerView: UIPickerView!
+    @IBOutlet var activityIndicator: UIActivityIndicatorView!
+
+    private var quoteService: QuoteService = QuoteService()
 
     private lazy var companies = [
         "Apple": "AAPL",
@@ -17,10 +19,15 @@ class ViewController: UIViewController {
         "Facebook": "FB",
     ]
 
+    private lazy var directionToColor = [
+        Direction.up: #colorLiteral(red: 0.4410318643, green: 1, blue: 0.5127332155, alpha: 1),
+        Direction.down: #colorLiteral(red: 1, green: 0.2428795703, blue: 0.1901274799, alpha: 1),
+        Direction.flat: #colorLiteral(red: 0.01622682996, green: 0.06301424652, blue: 0.08238171786, alpha: 1),
+    ]
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        companyNameLabel.text = "Tinkoff"
         companyPickerView.dataSource = self
         companyPickerView.delegate = self
 
@@ -29,74 +36,49 @@ class ViewController: UIViewController {
         requestQuoteUpdate()
     }
 
-    private func requestQuote(for symbol: String) {
-        print("Request quote for: \(symbol).")
-
-        let token = "pk_33807dd047364026b2755952731a7a44"
-        guard let url = URL(string: "https://cloud.iexapis.com/stable/stock/\(symbol)/quote?token=\(token)") else {
-            return
-        }
-
-        let dataTask = URLSession.shared.dataTask(with: url) { [weak self] data, responce, error in
-            if let data = data,
-                (responce as? HTTPURLResponse)?.statusCode == 200,
-                error == nil {
-                self?.parseQuote(from: data)
-            } else {
-                print("Network error!")
-            }
-        }
-
-        dataTask.resume()
-    }
-
-    private func parseQuote(from data: Data) {
-        do {
-            let jsonObject = try JSONSerialization.jsonObject(with: data)
-
-            guard
-                let json = jsonObject as? [String: Any],
-                let companyName = json["companyName"] as? String,
-                let companySymbol = json["symbol"] as? String,
-                let price = json["latestPrice"] as? Double,
-                let priceChange = json["change"] as? Double
-            else { return print("Json is invalid!") }
-
-            print(jsonObject)
-
-            DispatchQueue.main.async { [weak self] in
-                self?.displayStockInfo(companyName: companyName, companySymbol: companySymbol,
-                                       price: price, priceChange: priceChange)
-            }
-        } catch {
-            print("Can't parse quote with error: " + error.localizedDescription)
-        }
-    }
-
-    private func displayStockInfo(companyName: String,
-                                  companySymbol: String,
-                                  price: Double,
-                                  priceChange: Double) {
-        activityIndicator.stopAnimating()
-        
-        companyNameLabel.text = companyName
-        companySymbolLabel.text = companySymbol
-        priceLabel.text = "\(price)"
-        priceChangeLabel.text = "\(priceChange)"
-    }
-
     private func requestQuoteUpdate() {
+        let selectedRow = companyPickerView.selectedRow(inComponent: 0)
+        let selectedSymbol = Array(companies.values)[selectedRow]
+
         activityIndicator.startAnimating()
 
         companyNameLabel.text = "-"
         companySymbolLabel.text = "-"
         priceLabel.text = "-"
         priceChangeLabel.text = "-"
+        priceChangeLabel.textColor = directionToColor[Direction.flat]
 
-        let selectedRow = companyPickerView.selectedRow(inComponent: 0)
+        quoteService.requestQuote(for: selectedSymbol, successCallback: { currentQuote in
+            print("Current quote: \(currentQuote.toString()).")
+            self.displayStockInfo(companySymbol: currentQuote.companySymbol,
+                                  companyName: currentQuote.companyName,
+                                  price: currentQuote.price,
+                                  priceChange: currentQuote.priceChange,
+                                  direction: currentQuote.direction)
+        }) { error in
+            self.showNotification(error)
+        }
+    }
 
-        let selectedSymbol = Array(companies.values)[selectedRow]
-        requestQuote(for: selectedSymbol)
+    private func displayStockInfo(companySymbol: String,
+                                  companyName: String,
+                                  price: Double,
+                                  priceChange: Double,
+                                  direction: Direction) {
+        activityIndicator.stopAnimating()
+
+        companyNameLabel.text = companyName
+        companySymbolLabel.text = companySymbol
+        priceLabel.text = "\(price)"
+        priceChangeLabel.text = "\(priceChange)"
+        priceChangeLabel.textColor = directionToColor[direction]
+    }
+
+    private func showNotification(_ errorMessage: String) {
+        let alert = UIAlertController(title: "Internal Error", message: errorMessage, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Ok", style: .cancel, handler: nil))
+
+        present(alert, animated: true)
     }
 }
 
