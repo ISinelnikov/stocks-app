@@ -1,9 +1,13 @@
 import UIKit
 
 class ViewController: UIViewController {
-    @IBOutlet var companyNameLabel: UILabel!
-    @IBOutlet var companyPickerView: UIPickerView!
-    @IBOutlet var activityIndicator: UIActivityIndicatorView!
+    @IBOutlet weak var companyNameLabel: UILabel!
+    @IBOutlet weak var companySymbolLabel: UILabel!
+    @IBOutlet weak var priceLabel: UILabel!
+    @IBOutlet weak var priceChangeLabel: UILabel!
+    
+    @IBOutlet weak var companyPickerView: UIPickerView!
+    @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
 
     private lazy var companies = [
         "Apple": "AAPL",
