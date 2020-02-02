@@ -11,13 +11,7 @@ class ViewController: UIViewController {
 
     private var quoteService: QuoteService = QuoteService()
 
-    private lazy var companies = [
-        "Apple": "AAPL",
-        "Microsoft": "MSFT",
-        "Google": "GOOG",
-        "Amazon": "AMZN",
-        "Facebook": "FB",
-    ]
+    private lazy var companies: [String: String] = [String: String]()
 
     private lazy var directionToColor = [
         Direction.up: #colorLiteral(red: 0.4410318643, green: 1, blue: 0.5127332155, alpha: 1),
@@ -30,14 +24,33 @@ class ViewController: UIViewController {
 
         companyPickerView.dataSource = self
         companyPickerView.delegate = self
-
         activityIndicator.hidesWhenStopped = true
 
-        requestQuoteUpdate()
+        requestSymbols()
+    }
+    
+    private func requestSymbols() {
+        quoteService.requestSymbols(success: { nameToSymbol in
+            self.activityIndicator.startAnimating()
+            self.companies = nameToSymbol
+            // Refresh picker view after load companies
+            self.companyPickerView.reloadAllComponents()
+            self.requestQuoteUpdate()
+        }) { error in
+            self.showNotification(error)
+            self.activityIndicator.stopAnimating()
+        }
     }
 
     private func requestQuoteUpdate() {
         let selectedRow = companyPickerView.selectedRow(inComponent: 0)
+        
+        if (selectedRow == -1) {
+            self.showNotification("Internal error. Selected empty company.")
+            activityIndicator.stopAnimating()
+            return
+        }
+        
         let selectedSymbol = Array(companies.values)[selectedRow]
 
         activityIndicator.startAnimating()
@@ -48,7 +61,7 @@ class ViewController: UIViewController {
         priceChangeLabel.text = "-"
         priceChangeLabel.textColor = directionToColor[Direction.flat]
 
-        quoteService.requestQuote(for: selectedSymbol, successCallback: { currentQuote in
+        quoteService.requestQuote(for: selectedSymbol, success: { currentQuote in
             print("Current quote: \(currentQuote.toString()).")
             self.displayStockInfo(companySymbol: currentQuote.companySymbol,
                                   companyName: currentQuote.companyName,
@@ -67,11 +80,20 @@ class ViewController: UIViewController {
                                   direction: Direction) {
         activityIndicator.stopAnimating()
 
-        companyNameLabel.text = companyName
+        companyNameLabel.text = self.prepareCompanyName(companyName)
         companySymbolLabel.text = companySymbol
         priceLabel.text = "\(price)"
         priceChangeLabel.text = "\(priceChange)"
         priceChangeLabel.textColor = directionToColor[direction]
+    }
+    
+    private func prepareCompanyName(_ companyName: String) -> String {
+        if (companyName.count > 22) {
+            let firstIndex = companyName.startIndex
+            let lastIndex = companyName.index(firstIndex, offsetBy:21)
+            return "\(companyName[firstIndex...lastIndex])..."
+        }
+        return companyName
     }
 
     private func showNotification(_ errorMessage: String) {
